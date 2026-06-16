@@ -1,0 +1,246 @@
+# ============================================================
+# SKIN CANCER DETECTION USING CNN
+# Dataset:
+# dataset/
+# ├── benign/
+# └── malignant/
+# ============================================================
+
+!pip install -q tensorflow opencv-python matplotlib scikit-learn
+
+import os
+import cv2
+import numpy as np
+import matplotlib.pyplot as plt
+
+from sklearn.model_selection import train_test_split
+from sklearn.metrics import classification_report, confusion_matrix, accuracy_score
+
+import tensorflow as tf
+from tensorflow.keras.models import Sequential
+from tensorflow.keras.layers import (
+    Conv2D,
+    MaxPooling2D,
+    Flatten,
+    Dense,
+    Dropout,
+    BatchNormalization
+)
+from tensorflow.keras.utils import to_categorical
+
+# ============================================================
+# CONFIG
+# ============================================================
+
+DATASET_PATH = "/content/dataset"
+IMG_SIZE = 224
+BATCH_SIZE = 32
+EPOCHS = 15
+
+# ============================================================
+# LOAD DATA
+# ============================================================
+
+images = []
+labels = []
+
+classes = ["benign", "malignant"]
+
+for label, folder in enumerate(classes):
+
+    folder_path = os.path.join(DATASET_PATH, folder)
+
+    for image_name in os.listdir(folder_path):
+
+        image_path = os.path.join(folder_path, image_name)
+
+        try:
+            image = cv2.imread(image_path)
+            image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
+            image = cv2.resize(image, (IMG_SIZE, IMG_SIZE))
+
+            images.append(image)
+            labels.append(label)
+
+        except:
+            pass
+
+X = np.array(images, dtype=np.float32) / 255.0
+y = np.array(labels)
+
+print("Dataset Size:", len(X))
+
+# ============================================================
+# TRAIN TEST SPLIT
+# ============================================================
+
+X_train, X_test, y_train, y_test = train_test_split(
+    X,
+    y,
+    test_size=0.2,
+    random_state=42,
+    stratify=y
+)
+
+y_train_cat = to_categorical(y_train, 2)
+y_test_cat = to_categorical(y_test, 2)
+
+# ============================================================
+# CNN MODEL
+# ============================================================
+
+model = Sequential([
+
+    Conv2D(
+        32,
+        (3,3),
+        activation='relu',
+        input_shape=(IMG_SIZE, IMG_SIZE, 3)
+    ),
+    BatchNormalization(),
+    MaxPooling2D(),
+
+    Conv2D(
+        64,
+        (3,3),
+        activation='relu'
+    ),
+    BatchNormalization(),
+    MaxPooling2D(),
+
+    Conv2D(
+        128,
+        (3,3),
+        activation='relu'
+    ),
+    BatchNormalization(),
+    MaxPooling2D(),
+
+    Conv2D(
+        256,
+        (3,3),
+        activation='relu'
+    ),
+    BatchNormalization(),
+    MaxPooling2D(),
+
+    Flatten(),
+
+    Dense(
+        512,
+        activation='relu'
+    ),
+
+    Dropout(0.5),
+
+    Dense(
+        2,
+        activation='softmax'
+    )
+])
+
+model.compile(
+    optimizer='adam',
+    loss='categorical_crossentropy',
+    metrics=['accuracy']
+)
+
+model.summary()
+
+# ============================================================
+# TRAIN
+# ============================================================
+
+history = model.fit(
+    X_train,
+    y_train_cat,
+    validation_split=0.1,
+    epochs=EPOCHS,
+    batch_size=BATCH_SIZE
+)
+
+# ============================================================
+# EVALUATE
+# ============================================================
+
+predictions = model.predict(X_test)
+
+y_pred = np.argmax(predictions, axis=1)
+
+accuracy = accuracy_score(
+    y_test,
+    y_pred
+)
+
+print("\nAccuracy:", accuracy)
+
+print("\nClassification Report")
+print(
+    classification_report(
+        y_test,
+        y_pred,
+        target_names=classes
+    )
+)
+
+print("\nConfusion Matrix")
+print(
+    confusion_matrix(
+        y_test,
+        y_pred
+    )
+)
+
+# ============================================================
+# SAVE MODEL
+# ============================================================
+
+model.save(
+    "skin_cancer_cnn_model.h5"
+)
+
+# ============================================================
+# PLOT ACCURACY
+# ============================================================
+
+plt.figure(figsize=(8,5))
+
+plt.plot(
+    history.history['accuracy'],
+    label='Train Accuracy'
+)
+
+plt.plot(
+    history.history['val_accuracy'],
+    label='Validation Accuracy'
+)
+
+plt.xlabel("Epoch")
+plt.ylabel("Accuracy")
+plt.legend()
+plt.title("Training Performance")
+
+plt.show()
+
+# ============================================================
+# SAMPLE PREDICTION
+# ============================================================
+
+sample = X_test[0]
+
+prediction = model.predict(
+    np.expand_dims(sample, axis=0)
+)
+
+predicted_class = classes[
+    np.argmax(prediction)
+]
+
+plt.imshow(sample)
+plt.title(
+    f"Prediction: {predicted_class}"
+)
+plt.axis("off")
+plt.show()
+
+print("DONE")
